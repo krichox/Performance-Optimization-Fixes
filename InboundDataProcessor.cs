@@ -5,42 +5,48 @@ using System.Threading.Tasks;
 namespace Performance.Optimization
 {
     /// <summary>
-    /// 高性能数据处理引擎 - 针对 B-002 内存泄漏修复
+    /// High-performance data processing engine for task B-002.
+    /// Implements buffer pooling to eliminate LOH fragmentation.
     /// </summary>
     public class InboundDataProcessor
     {
-        // 使用共享内存池减少堆分配，彻底消除 LOH 碎片
+        // Use shared memory pool to reduce heap allocations and GC pressure.
         private static readonly ArrayPool<byte> _bufferPool = ArrayPool<byte>.Shared;
 
+        /// <summary>
+        /// Processes inbound data using pooled buffers.
+        /// </summary>
+        /// <param name="inputData">The source memory block to process.</param>
         public async Task ProcessDataAsync(ReadOnlyMemory<byte> inputData)
         {
-            // 💡 优化点：不再使用 new byte[128KB]，而是从池中租用
-            // 128KB 是进入 LOH 的阈值，频繁分配会导致严重的 GC Stop-the-world 停顿
+            // Optimization: Rent a buffer instead of allocating 'new byte[128KB]'.
+            // 128KB triggers Large Object Heap (LOH), leading to expensive Stop-the-world GC events.
             int bufferSize = 131072; 
             byte[] buffer = _bufferPool.Rent(bufferSize);
 
             try
             {
-                // 模拟高性能数据拷贝与处理
+                // Perform high-speed data copy and processing.
                 inputData.Span.CopyTo(buffer);
                 
                 await PerformHeavyComputationAsync(buffer);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"处理异常: {ex.Message}");
+                // Error handling with context.
+                Console.WriteLine($"Processing error: {ex.Message}");
                 throw;
             }
             finally
             {
-                // ⚠️ 关键闭环：必须归还缓冲区，否则会导致池内存泄漏
+                // Critical: Ensure buffer is returned to the pool to prevent leaks.
                 _bufferPool.Return(buffer);
             }
         }
 
         private Task PerformHeavyComputationAsync(byte[] data)
         {
-            // 模拟复杂的业务处理
+            // Simulate complex business logic computation.
             return Task.Delay(10); 
         }
     }
